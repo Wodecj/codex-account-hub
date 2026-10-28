@@ -8,3 +8,5 @@
 .settings-row{margin-top:20px;display:flex;justify-content:flex-end}.setting{display:inline-flex;align-items:center;gap:8px;color:#53657b;font-size:13px;cursor:pointer}.setting input{width:auto;margin:0;accent-color:#1d4ed8}.toolbar{margin-top:20px}
 
 .card-head .identity,.name-block{min-width:0;flex:1}.account-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.card-head .sync{margin:3px 0 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.card-head .icon-btn{flex:none}
+
+.settings-row{gap:20px;flex-wrap:wrap}.setting select{border:1px solid #d8e0eb;border-radius:8px;background:#fff;color:#334155;padding:7px 10px;font:inherit}

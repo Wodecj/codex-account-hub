@@ -1,6 +1,6 @@
 {
   "name": "codex-account-hub",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Windows Codex CLI profile launcher",
   "main": "main.js",
   "scripts": {

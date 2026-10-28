@@ -11,13 +11,15 @@ let quitting=false;
 const root = path.join(app.getPath('userData'), 'profiles');
 const registry = path.join(app.getPath('userData'), 'profiles.json');
 const settingsPath = path.join(app.getPath('userData'), 'settings.json');
-function readSettings() { try { const data=JSON.parse(fs.readFileSync(settingsPath,'utf8')); return {autoRefresh:data.autoRefresh===true}; } catch(e) { if(e.code==='ENOENT') return {autoRefresh:false}; throw new Error('无法读取设置'); } }
+const refreshIntervals = [0,5,10,20,30,60];
+function readSettings() { try { const data=JSON.parse(fs.readFileSync(settingsPath,'utf8')); return {autoRefresh:data.autoRefresh===true,refreshInterval:refreshIntervals.includes(data.refreshInterval)?data.refreshInterval:0}; } catch(e) { if(e.code==='ENOENT') return {autoRefresh:false,refreshInterval:0}; throw new Error('无法读取设置'); } }
+function saveSettings(settings) { fs.mkdirSync(path.dirname(settingsPath),{recursive:true}); const tmp=settingsPath+'.tmp'; fs.writeFileSync(tmp,JSON.stringify(settings,null,2)); fs.renameSync(tmp,settingsPath); return settings; }
 function read() { try { const v = JSON.parse(fs.readFileSync(registry, 'utf8')); if (!Array.isArray(v)) throw Error(); return v.filter(x => typeof x.name === 'string' && /^[0-9a-f-]{36}$/.test(x.id)); } catch (e) { if (e.code === 'ENOENT') return []; throw new Error('账号列表无法读取，请检查 profiles.json。'); } }
 function save(v) { fs.mkdirSync(path.dirname(registry), {recursive:true}); const tmp = registry + '.tmp'; fs.writeFileSync(tmp, JSON.stringify(v,null,2)); fs.renameSync(tmp,registry); }
 function profile(id) { const item=read().find(x=>x.id===id); if(!item) throw Error('账号不存在'); return path.join(root,item.id); }
 app.whenReady().then(() => {
  Menu.setApplicationMenu(null);
- const win = new BrowserWindow({width:1000,height:720,minWidth:720,minHeight:550,backgroundColor:'#101521',webPreferences:{preload:path.join(__dirname,'preload.js'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
+ const win = new BrowserWindow({width:1000,height:720,minWidth:720,minHeight:550,backgroundColor:'#101521',webPreferences:{preload:path.join(__dirname,'preload.js'),contextIsolation:true,nodeIntegration:false,sandbox:true,backgroundThrottling:false}});
  if (app.isPackaged && updateSource.owner && updateSource.repo) {
    autoUpdater.setFeedURL({provider:'github',owner:updateSource.owner,repo:updateSource.repo});
    autoUpdater.autoDownload=false;
@@ -49,7 +51,8 @@ app.whenReady().then(() => {
  win.webContents.setWindowOpenHandler(()=>({action:'deny'}));
  ipcMain.handle('list',()=>read());
  ipcMain.handle('settings:get',()=>readSettings());
- ipcMain.handle('settings:set-auto-refresh',(_,value)=>{ if(typeof value!=='boolean') throw new Error('无效设置'); const settings={...readSettings(),autoRefresh:value}; fs.mkdirSync(path.dirname(settingsPath),{recursive:true}); const tmp=settingsPath+'.tmp'; fs.writeFileSync(tmp,JSON.stringify(settings,null,2)); fs.renameSync(tmp,settingsPath); return settings; });
+ ipcMain.handle('settings:set-auto-refresh',(_,value)=>{ if(typeof value!=='boolean') throw new Error('无效设置'); return saveSettings({...readSettings(),autoRefresh:value}); });
+ ipcMain.handle('settings:set-refresh-interval',(_,value)=>{ if(!refreshIntervals.includes(value)) throw new Error('无效刷新频率'); return saveSettings({...readSettings(),refreshInterval:value}); });
  ipcMain.handle('quota',async (_,id)=>{ const result=await readQuota(profile(id)); const buckets=result.rateLimitsByLimitId || (result.rateLimits ? {codex:result.rateLimits} : {}); return Object.entries(buckets).map(([id,b])=>({id,name:b.limitName || id,plan:b.planType,primary:b.primary,secondary:b.secondary})); });
  ipcMain.handle('add',(_,name)=>{ if(typeof name!=='string'||!name.trim()||name.length>60) throw Error('请输入 1–60 个字符的名称'); let list=read(); const item={id:randomUUID(),name:name.trim()}; fs.mkdirSync(path.join(root,item.id),{recursive:true}); list.push(item); save(list); return list; });
  ipcMain.handle('launch',async (_,id,mode)=>{ const dir=profile(id); if(!['login','start','status'].includes(mode)) throw Error('无效操作'); const escaped=dir.replace(/'/g,"''"); const command=`$env:CODEX_HOME = '${escaped}'; Write-Host 'Codex profile:' $env:CODEX_HOME; if (-not (Get-Command codex -ErrorAction SilentlyContinue)) { Write-Host 'Codex CLI not found. Install Node.js and run: npm install -g @openai/codex'; } else { codex ${mode==='login'?'login':mode==='status'?'login status':'--no-daemon'} }`; const encoded=Buffer.from(command,'utf16le').toString('base64'); const launcher=`Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoExit','-EncodedCommand','${encoded}') -ErrorAction Stop`; await new Promise((resolve,reject)=>{const child=spawn('powershell.exe',['-NoProfile','-NonInteractive','-Command',launcher],{windowsHide:true}); let error=''; child.stderr.on('data',d=>error+=d.toString()); child.on('error',reject); child.on('close',code=>code===0?resolve():reject(new Error(error || '无法打开终端')));}); });
