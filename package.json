@@ -41,7 +41,8 @@
         "owner": "Wodecj",
         "repo": "codex-account-hub"
       }
-    ]
+    ],
+    "artifactName": "Codex-Account-Hub-Setup-${version}.${ext}"
   },
   "dependencies": {
     "electron-updater": "^6.8.11"
