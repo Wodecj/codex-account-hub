@@ -8,6 +8,10 @@ const { autoUpdater } = require('electron-updater');
 const updateSource = require('./update-source.json');
 let tray=null;
 let quitting=false;
+let mainWindow=null;
+const hasLock=app.requestSingleInstanceLock();
+if(!hasLock) app.quit();
+else app.on('second-instance',()=>{if(mainWindow&&!mainWindow.isDestroyed()){if(mainWindow.isMinimized())mainWindow.restore();mainWindow.show();mainWindow.focus();}});
 const root = path.join(app.getPath('userData'), 'profiles');
 const registry = path.join(app.getPath('userData'), 'profiles.json');
 const settingsPath = path.join(app.getPath('userData'), 'settings.json');
@@ -17,9 +21,10 @@ function saveSettings(settings) { fs.mkdirSync(path.dirname(settingsPath),{recur
 function read() { try { const v = JSON.parse(fs.readFileSync(registry, 'utf8')); if (!Array.isArray(v)) throw Error(); return v.filter(x => typeof x.name === 'string' && /^[0-9a-f-]{36}$/.test(x.id)); } catch (e) { if (e.code === 'ENOENT') return []; throw new Error('账号列表无法读取，请检查 profiles.json。'); } }
 function save(v) { fs.mkdirSync(path.dirname(registry), {recursive:true}); const tmp = registry + '.tmp'; fs.writeFileSync(tmp, JSON.stringify(v,null,2)); fs.renameSync(tmp,registry); }
 function profile(id) { const item=read().find(x=>x.id===id); if(!item) throw Error('账号不存在'); return path.join(root,item.id); }
-app.whenReady().then(() => {
+if(hasLock) app.whenReady().then(() => {
  Menu.setApplicationMenu(null);
  const win = new BrowserWindow({width:1000,height:720,minWidth:720,minHeight:550,backgroundColor:'#101521',webPreferences:{preload:path.join(__dirname,'preload.js'),contextIsolation:true,nodeIntegration:false,sandbox:true,backgroundThrottling:false}});
+ mainWindow=win;
  if (app.isPackaged && updateSource.owner && updateSource.repo) {
    autoUpdater.setFeedURL({provider:'github',owner:updateSource.owner,repo:updateSource.repo});
    autoUpdater.autoDownload=false;
